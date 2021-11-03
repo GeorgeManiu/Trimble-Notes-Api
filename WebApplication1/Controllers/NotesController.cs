@@ -5,113 +5,115 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using WebApplication1.Models;
+using WebApplication1.Services;
 
 namespace WebApplication1.Controllers
 {
+    /// <summary>
+    /// Defines the <see cref="NotesController" />.
+    /// </summary>
     [ApiController]
     [Route("[controller]")]
     public class NotesController : ControllerBase
     {
+        INoteCollectionService _noteCollectionService;
 
-        static List<Notes> _notes = new List<Notes> { 
-        new Notes { Id = Guid.NewGuid(), CategoryId = "1", OwnerId = new Guid("00000000-0000-0000-0000-000000000001"), Title = "First Note", Description = "First Note Description" },
-        new Notes { Id = Guid.NewGuid(), CategoryId = "1", OwnerId = new Guid("00000000-0000-0000-0000-000000000001"), Title = "Second Note", Description = "Second Note Description" },
-        new Notes { Id = Guid.NewGuid(), CategoryId = "1", OwnerId = new Guid("00000000-0000-0000-0000-000000000001"), Title = "Third Note", Description = "Third Note Description" },
-        new Notes { Id = Guid.NewGuid(), CategoryId = "1", OwnerId = new Guid("00000000-0000-0000-0000-000000000001"), Title = "Fourth Note", Description = "Fourth Note Description" },
-        new Notes { Id = Guid.NewGuid(), CategoryId = "1", OwnerId = new Guid("00000000-0000-0000-0000-000000000001"), Title = "Fifth Note", Description = "Fifth Note Description" }
-        };
-
-        public NotesController()
+        public NotesController(INoteCollectionService noteCollectionService)
         {
-
+            _noteCollectionService = noteCollectionService ?? throw new ArgumentNullException(nameof(noteCollectionService));
 
         }
 
+        /// <summary>
+        /// The GetNotes.
+        /// </summary>
+        /// <returns>The <see cref="IActionResult"/>.</returns>
         [HttpGet]
-        public IActionResult GetNotes()
+        public async Task<IActionResult> GetNotes()
         {
-            return Ok(_notes);
+            List<Notes> notes = await _noteCollectionService.GetAll();
+            return Ok(notes);
         }
 
-
+        /// <summary>
+        /// The CreateNote.
+        /// </summary>
+        /// <param name="note">The note<see cref="Notes"/>.</param>
+        /// <returns>The <see cref="IActionResult"/>.</returns>
         [HttpPost]
-        public IActionResult CreateNote([FromBody] Notes note)
+        public async Task<IActionResult> CreateNote([FromBody] Notes note)
         {
             if (note == null)
             {
                 return BadRequest("Note cannot be null");
             }
 
-            _notes.Add(note);
-            return Ok();
+            if (await _noteCollectionService.Create(note))
+            {
+                return CreatedAtRoute("GetNoteById", new { id = note.Id.ToString() }, note);
+            }
+            return NoContent();
         }
 
-        [HttpGet("{id}")]
-        public IActionResult GetByOwnerId(Guid id)
+        /// <summary>
+        /// Return a note find by a specified id.
+        /// </summary>
+        /// <param name="id">.</param>
+        /// <returns>.</returns>
+        [HttpGet("{id}", Name = "GetNoteById")]
+        public async Task<IActionResult> GetNoteById(Guid id)
         {
-            List<Notes> note = _notes.FindAll(note => note.OwnerId == id);
+            var note = await _noteCollectionService.Get(id);
+
+            if (note == null)
+            {
+                return BadRequest("Note was not found");
+            }
             return Ok(note);
         }
 
+        /// <summary>
+        /// The UpdateNote.
+        /// </summary>
+        /// <param name="id">The id<see cref="Guid"/>.</param>
+        /// <param name="noteToUpdate">The noteToUpdate<see cref="Notes"/>.</param>
+        /// <returns>The <see cref="IActionResult"/>.</returns>
         [HttpPut("{id}")]
-        public IActionResult UpdateNote(Guid id, [FromBody] Notes noteToUpdate)
+        public async Task<IActionResult> UpdateNote(Guid id, [FromBody] Notes noteToUpdate)
         {
             if (noteToUpdate == null)
             {
                 return BadRequest("Note cannot be null");
             }
-            int index = _notes.FindIndex(note => note.Id == id);
-            if(index == -1)
-            {
-                return NotFound();
-            }
-            noteToUpdate.Id = _notes[index].Id;
-            _notes[index] = noteToUpdate;
 
-            return NoContent();
+            if (await _noteCollectionService.Update(id, noteToUpdate))
+            {
+                return Ok(_noteCollectionService.Get(id));
+            }
+
+            return NotFound("Note not found!");
         }
-
-        [HttpDelete("{id}")]
-        public IActionResult DeleteNote(Guid id)
-        {
-            var index = _notes.FindIndex(note => note.Id == id);
-
-            if(index == -1)
-            {
-                return NotFound();
-            }
-
-            _notes.RemoveAt(index);
-
-            return NoContent();
-        }
-
-        [HttpPatch("{id}")]
-        public IActionResult UpdateTitleNote(Guid id,[FromBody] string title)
-        {
-            if(string.IsNullOrEmpty(title))
-            {
-                return BadRequest("The string cannot be null");
-            }
-
-            var index = _notes.FindIndex(note => note.Id == id);
-
-            if (index == -1)
-            {
-                return NotFound();
-            }
-            _notes[index].Title = title;
-            return Ok(_notes[index]);
-        }
-
-
 
         /// <summary>
-        /// Returns a list of notes
+        /// The DeleteNote.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="id">The id<see cref="Guid"/>.</param>
+        /// <returns>The <see cref="IActionResult"/>.</returns>
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteNote(Guid id)
+        {
+            if (id == null)
+            {
+                return BadRequest("Id cannot be null!");
+            }
 
+            if (await _noteCollectionService.Delete(id))
+            {
+                return NoContent();
+            }
 
+            return NotFound("Note not found!");
+        }
     }
 }
 
